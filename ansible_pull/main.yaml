@@ -1,0 +1,84 @@
+---
+- name: download and install roles
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    dest_folder: terraform
+    s3bucket: ansibleroles
+    ansible_roles: nginx
+    cloudfront_url: c
+    name_db: w
+    username_db: w
+    password_db: w
+    host_db: w
+    rds_identifier: w
+    reg: us-east-1
+    backup_bucket: bb
+    backup_prefix: bp
+    backup_www_file: bf
+    import_wordpress: true
+
+  tasks:
+
+  - name: get rds instance facts
+    rds_instance_info:
+      region: "{{ reg }}"
+      db_instance_identifier: "{{ rds_identifier }}"
+    register: rds_metadata
+
+  - name: set rds endpoint
+    set_fact:
+      host_db: "{{ item }}"
+    with_items: "{{ rds_metadata.instances|map(attribute='endpoint.address')|list }}"
+
+  - name: get file from s3 bucket
+    aws_s3:
+      bucket: "{{ s3bucket }}"
+      object: "/{{ item }}.zip"
+      dest: "/{{ dest_folder }}/provisioners/{{ item }}.zip"
+      mode: get
+    with_items: "{{ ansible_roles }}"
+    become: true
+
+  - name: Install dependencies
+    apt:
+      name: "{{ packages }}"
+    vars:
+      packages:
+        - unzip
+    become: true
+
+  - name: create folder
+    file:
+      path: "/{{ dest_folder }}/provisioners/roles/{{ item }}"
+      state: directory
+    with_items: "{{ ansible_roles }}"
+
+  - name: unzip role
+    unarchive:
+      src: "/{{ dest_folder }}/provisioners/{{ item }}.zip"
+      dest: "/{{ dest_folder }}/provisioners/roles/{{ item }}"
+    with_items: "{{ ansible_roles }}"
+
+  - name: delete zip files
+    file:
+      dest: "/{{ dest_folder }}/provisioners/{{ item }}.zip"
+      state: absent
+    with_items: "{{ ansible_roles }}"
+
+  - name: install wordpress role
+    include_role:
+      name: "{{ item }}"
+    vars:
+      url_cloudfront: "{{ cloudfront_url }}"
+      db_name: "{{ name_db }}"
+      db_username: "{{ username_db }}"
+      db_password: "{{ password_db }}"
+      db_host: "{{ host_db }}"
+      backup_file: "{{ backup_www_file }}"
+      www_prefix: "{{ backup_prefix }}"
+      import_www: "{{ import_wordpress }}"
+      s3_bucket_backup: "{{ backup_bucket }}"
+    with_items: "{{ ansible_roles }}"
+    when: item == 'wordpress'

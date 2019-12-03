@@ -1,0 +1,23 @@
+
+---
+- name: run web, db migration
+  become: true
+
+  vars:
+    media_bucket: mb
+    backup_bucket: bb
+    bucket_prefix_db: bpd
+    bucket_prefix_www: bpw
+    bucket_backup_file: bbf
+
+  tasks:
+
+  - name: www and db migration
+    include_role:
+      name: web_db_migrate
+    vars:
+      s3_bucket_backup: "{{ backup_bucket }}"
+      s3_bucket_media: "{{ media_bucket }}"
+      db_prefix: "{{ bucket_prefix_db }}"
+      www_prefix: "{{ bucket_prefix_www }}"
+      backup_file: "{{ bucket_backup_file }}"
