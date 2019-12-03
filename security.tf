@@ -1,5 +1,6 @@
-# *********************
-#  SECURITY GROUPS
+#---------------------------------------------------
+# Security Groups
+#---------------------------------------------------
 
 resource "aws_security_group" "bastion_sg_pub" {
   name = "bastion_sec_pub"
