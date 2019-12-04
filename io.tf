@@ -63,8 +63,6 @@ variable "instance_config_asg" {
 
       region = "ap-southeast-2"
 
-      ami = "ami-5e8bb23b"
-
       availability_zone = "ap-southeast-2a"
 
       instance_type = "t2.micro"
@@ -97,8 +95,6 @@ variable "instance_config" {
       name = "bastion"
 
       region = "ap-southeast-2"
-
-      ami = "ami-5e8bb23b"
 
       availability_zone = "ap-southeast-2a"
 
