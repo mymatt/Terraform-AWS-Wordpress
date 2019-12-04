@@ -217,7 +217,7 @@ variable "dns_zone" {
 }
 
 variable "git_address" {
-  default = "https://github.com/mymatt/Terraform_wp/ansible_pull.git"
+  default = "https://github.com/mymatt/Terraform-AWS-Wordpress.git"
 }
 
 variable "ami_name" {
