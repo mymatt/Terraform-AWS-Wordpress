@@ -116,7 +116,7 @@ variable "role_profiles" {
   default = {
     web = ["wordpress"]
 
-    # bastion = ["nil"]
+    bastion = ["nil"]
   }
 }
 
