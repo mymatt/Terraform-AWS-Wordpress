@@ -157,33 +157,3 @@ resource "aws_db_subnet_group" "default" {
     Name = "DB_subnet_group"
   }
 }
-
-# *********************
-#  INTERNAL DNS
-# resource "aws_vpc_dhcp_options" "tf-dhcp" {
-#   domain_name         = "var.dns_zone"
-#   domain_name_servers = ["AmazonProvidedDNS"]
-# }
-#
-# resource "aws_vpc_dhcp_options_association" "tf_dhcp_as" {
-#   vpc_id          = "aws_vpc.default.id"
-#   dhcp_options_id = "aws_vpc_dhcp_options.tf-dhcp.id"
-# }
-#
-# resource "aws_route53_zone" "tf-dns-zone" {
-#   name = "var.dns_zone"
-#
-#   vpc {
-#     vpc_id = "aws_vpc.default.id"
-#   }
-# }
-#
-# resource "aws_route53_record" "tf-dns_db" {
-#   count      = "local.count_inst"
-#   zone_id    = "aws_route53_zone.tf-dns-zone.zone_id"
-#   name       = "lookup(var.instance_config[count.index], "name")}.var.dns_zone"
-#   type       = "A"
-#   ttl        = "300"
-#   records    = ["element(aws_instance.tf_example.*.private_ip, count.index)"]
-#   depends_on = ["aws_instance.tf_example"]
-# }
