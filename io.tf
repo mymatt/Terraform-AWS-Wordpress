@@ -1,5 +1,6 @@
-######INPUTS
-##########################
+#---------------------------------------------------
+# Inputs
+#---------------------------------------------------
 
 variable "ec2profile" {
   default = "ec2play"
@@ -55,7 +56,7 @@ variable "instance_type" {
 
 # names must be unique
 variable "instance_config_asg" {
-  type = "map"
+  type = map
 
   default = {
     "0" = {
@@ -88,7 +89,7 @@ variable "instance_config_asg" {
 
 # names must be unique
 variable "instance_config" {
-  type = "map"
+  type = map
 
   default = {
     "0" = {
@@ -110,7 +111,7 @@ variable "instance_config" {
 }
 
 variable "role_profiles" {
-  type = "map"
+  type = map
 
   default = {
     web = ["wordpress"]
@@ -120,7 +121,7 @@ variable "role_profiles" {
 }
 
 variable "rds_config" {
-  type = "map"
+  type = map
 
   default = {
     "0" = {
@@ -154,7 +155,7 @@ variable "rds_config" {
 }
 
 variable "elb_config" {
-  type = "map"
+  type = map
 
   default = {
     "0" = {
@@ -171,7 +172,7 @@ variable "elb_num" {
 }
 
 variable "amis" {
-  type = "map"
+  type = map
 
   default = {
     "ap-southeast-2" = "ami-5e8bb23b"
@@ -228,8 +229,8 @@ variable "ami_owner" {
   default = "099720109477" #Canonical
 }
 
-variable "vault_port" {
-  default = "8200"
+variable "rds_port" {
+  default = "3306"
 }
 
 variable "sg" {
@@ -252,8 +253,9 @@ variable "s3_origin_id" {
   default = "media-assets-mm"
 }
 
-######OUTPUTS
-#############
+#---------------------------------------------------
+# Outputs
+#---------------------------------------------------
 
 # output "proxy_public_ip" {
 #   value = "${join(",", aws_eip.proxy.*.public_ip)}"

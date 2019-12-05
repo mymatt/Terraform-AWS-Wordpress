@@ -6,7 +6,7 @@ terraform {
     bucket  = "tf-m-state"
     key     = "terraform_aws_wp.tfstate"
     region  = "ap-southeast-2"
-    profile = "s3play"
+    profile = "ec2play"
   }
 }
 
@@ -14,9 +14,9 @@ terraform {
 # AWS Provider - Credentials for Authentication
 #---------------------------------------------------
 provider "aws" {
-  region                  = "${var.region}"
-  shared_credentials_file = "${var.cred_file}"
-  profile                 = "${var.ec2profile}"
+  region                  = var.region
+  shared_credentials_file = var.cred_file
+  profile                 = var.ec2profile
 }
 
 #---------------------------------------------------
@@ -28,12 +28,12 @@ resource "tls_private_key" "generated" {
 }
 
 resource "aws_key_pair" "generated_key" {
-  key_name   = "${var.key_name}"
-  public_key = "${tls_private_key.generated.public_key_openssh}"
+  key_name   = var.key_name
+  public_key = tls_private_key.generated.public_key_openssh
 }
 
 resource "local_file" "vpc_id" {
-  content  = "${tls_private_key.generated.private_key_pem}"
+  content  = tls_private_key.generated.private_key_pem
   filename = "${var.key_name}.pem"
 
   provisioner "local-exec" {
@@ -46,7 +46,7 @@ resource "local_file" "vpc_id" {
 #---------------------------------------------------
 resource "aws_iam_role" "ec2_s3_access_role" {
   name               = "s3_role"
-  assume_role_policy = "${data.aws_iam_policy_document.policy.json}"
+  assume_role_policy = data.aws_iam_policy_document.policy.json
 }
 
 data "aws_iam_policy_document" "policy" {
@@ -77,60 +77,45 @@ data "aws_iam_policy_document" "policy" {
 
 resource "aws_iam_instance_profile" "ec2_s3_profile" {
   name = "s3_iam_profile"
-  role = "${aws_iam_role.ec2_s3_access_role.name}"
+  role = aws_iam_role.ec2_s3_access_role.name
 }
 
 data "aws_iam_policy_document" "ec2_s3_access" {
-  # s3 access to download ansible roles
-  # s3 access to upload images to
   statement {
     effect = "Allow"
-
     actions = [
       "s3:ListAllMyBuckets",
       "s3:GetBucketLocation",
       "s3:PutObject",
       "s3:GetObject",
     ]
-
     resources = [
       "arn:aws:s3:::*",
     ]
   }
-
   statement {
     effect = "Allow"
-
     actions = [
       "s3:*",
     ]
-
     resources = [
       "*",
     ]
   }
-
-  # allow consul to gather ec2 tag info
   statement {
     effect = "Allow"
-
     actions = [
       "ec2:DescribeInstances",
     ]
-
     resources = [
       "*",
     ]
   }
-
-  # gather info about elb's
   statement {
     effect = "Allow"
-
     actions = [
       "elasticloadbalancing:DescribeLoadBalancers",
     ]
-
     resources = [
       "*",
     ]
@@ -140,13 +125,13 @@ data "aws_iam_policy_document" "ec2_s3_access" {
 resource "aws_iam_policy" "allow_ec2_s3_access_policy" {
   name        = "s3_policy"
   description = "A s3 test policy"
-  policy      = "${data.aws_iam_policy_document.ec2_s3_access.json}"
+  policy      = data.aws_iam_policy_document.ec2_s3_access.json
 }
 
 resource "aws_iam_policy_attachment" "ec2-s3-attach" {
   name       = "s3_attach_policy"
-  roles      = ["${aws_iam_role.ec2_s3_access_role.name}"]
-  policy_arn = "${aws_iam_policy.allow_ec2_s3_access_policy.arn}"
+  roles      = [aws_iam_role.ec2_s3_access_role.name]
+  policy_arn = aws_iam_policy.allow_ec2_s3_access_policy.arn
 }
 
 #---------------------------------------------------
@@ -154,7 +139,7 @@ resource "aws_iam_policy_attachment" "ec2-s3-attach" {
 #---------------------------------------------------
 
 resource "aws_s3_bucket" "media_assets" {
-  bucket = "${s3_bucket_media_name}"
+  bucket = "s3_bucket_media_name"
   acl    = "public-read"
 
   tags = {
@@ -167,7 +152,7 @@ resource "aws_s3_bucket" "media_assets" {
 #---------------------------------------------------
 
 resource "aws_s3_bucket" "backup" {
-  bucket = "${s3_bucket_backup_name}"
+  bucket = "s3_bucket_backup_name"
   acl    = "public-read"
 
   tags = {
@@ -180,10 +165,10 @@ resource "aws_s3_bucket" "backup" {
 #---------------------------------------------------
 
 resource "null_resource" "web_db_migration" {
-  depends_on = ["aws_s3_bucket.backup", "aws_s3_bucket.media_assets"]
+  depends_on = [aws_s3_bucket.backup, aws_s3_bucket.media_assets]
 
   provisioner "local-exec" {
-    command = "ansible-playbook --connection=local 127.0.0.1, ${migrate_playbook} -e 'media_bucket=${s3_bucket_media_name} backup_bucket=${s3_bucket_backup_name} bucket_prefix_db =${s3_bucket_db_prefix} bucket_prefix_www =${s3_bucket_www_prefix} bucket_backup_file =${s3_bucket_www_backup_file}' "
+    command = "ansible-playbook --connection=local 127.0.0.1, ${var.migrate_playbook} -e 'media_bucket=${var.s3_bucket_media_name} backup_bucket=${var.s3_bucket_backup_name} bucket_prefix_db =${var.s3_bucket_db_prefix} bucket_prefix_www =${var.s3_bucket_www_prefix} bucket_backup_file =${var.s3_bucket_www_backup_file}' "
   }
 }
 
@@ -195,15 +180,15 @@ data "aws_ami" "ubuntu" {
 
   filter {
     name   = "name"
-    values = ["${var.ami_name}"]
+    values = [var.ami_name]
   }
 
   filter {
     name   = "virtualization-type"
-    values = ["${var.ami_type}"]
+    values = [var.ami_type]
   }
 
-  owners = ["${var.ami_owner}"]
+  owners = [var.ami_owner]
 }
 
 #---------------------------------------------------
@@ -220,27 +205,27 @@ locals {
 # Setup template file for shell and ansible provisioning
 #---------------------------------------------------
 data "template_file" "user_data" {
-  count = "${local.count_inst}"
+  count = local.count_inst
 
   template = "${file("scripts/user_data.tpl")}"
 
-  vars {
+  vars = {
     tr_git_address   = "${var.git_address}"
     tr_region        = "${var.region}"
     tr_s3bucket      = "${var.s3_bucket_name}"
     tr_ip            = "${lookup(var.instance_config[count.index], "subnet")=="private" ? cidrhost(var.private_subnet_cidr, count.index + 21) : cidrhost(var.public_subnet_cidr, count.index + 21)}"
-    tr_ansible_roles = "${jsonencode(var.role_profiles.[lookup(var.instance_config[count.index], "roles")])}"
+    tr_ansible_roles = "${jsonencode(var.role_profiles[lookup(var.instance_config[count.index], "roles")])}"
 
-    tr_rds_identifier = "${lookup(var.rds_config[count.index], "identifier"}"
-    tr_db_name = "${lookup(var.rds_config[count.index], "name"}"
-    tr_db_username = "${lookup(var.rds_config[count.index], "UN"}"
-    tr_db_password = "${lookup(var.rds_config[count.index], "PW"}"
+    tr_rds_identifier = "${lookup(var.rds_config[count.index], "identifier")}"
+    tr_db_name = "${lookup(var.rds_config[count.index], "name")}"
+    tr_db_username = "${lookup(var.rds_config[count.index], "UN")}"
+    tr_db_password = "${lookup(var.rds_config[count.index], "PW")}"
 
     tr_cloudfront_url = "${var.www_domain_name}"
 
-    tr_backup_bucket = "${s3_bucket_backup_name}"
-    tr_bucket_prefix_www = "${s3_bucket_www_prefix}"
-    tr_bucket_backup_file = "${s3_bucket_www_backup_file}"
+    tr_backup_bucket = "${var.s3_bucket_backup_name}"
+    tr_bucket_prefix_www = "${var.s3_bucket_www_prefix}"
+    tr_bucket_backup_file = "${var.s3_bucket_www_backup_file}"
 
   }
 }
@@ -249,18 +234,18 @@ data "template_file" "user_data" {
 # Create single EC2 instances not in ASG: bastion
 #---------------------------------------------------
 resource "aws_instance" "tf_example" {
-  count = "${local.count_inst}"
+  count = local.count_inst
 
-  private_ip             = "${lookup(var.instance_config[count.index], "subnet")=="private" ? cidrhost(var.private_subnet_cidr, count.index + 21) : cidrhost(var.public_subnet_cidr, count.index + 21)}"
-  ami                    = "${data.aws_ami.ubuntu.id}"
-  instance_type          = "${lookup(var.instance_config[count.index], "instance_type")}"
-  key_name               = "${aws_key_pair.generated_key.key_name}"
-  iam_instance_profile   = "${aws_iam_instance_profile.ec2_s3_profile.name}"
+  private_ip             = lookup(var.instance_config[count.index], "subnet")=="private" ? cidrhost(var.private_subnet_cidr, count.index + 21) : cidrhost(var.public_subnet_cidr, count.index + 21)
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = lookup(var.instance_config[count.index], "instance_type")
+  key_name               = aws_key_pair.generated_key.key_name
+  iam_instance_profile   = aws_iam_instance_profile.ec2_s3_profile.name
   vpc_security_group_ids = ["${var.sg}.${lookup(var.instance_config[count.index], "security_group")}.${var.id}"]
-  subnet_id              = "${lookup(var.instance_config[count.index], "subnet")=="private" ? aws_subnet.private-subnet.id : aws_subnet.public-subnet.id}"
+  subnet_id              = lookup(var.instance_config[count.index], "subnet")=="private" ? aws_subnet.private-subnet.id : aws_subnet.public-subnet.id
 
-  tags {
-    Name = "${lookup(var.instance_config[count.index], "name")}"
+  tags = {
+    Name = lookup(var.instance_config[count.index], "name")
   }
 }
 
@@ -268,18 +253,18 @@ resource "aws_instance" "tf_example" {
 # Create AWS launch configurations for ASG's
 #---------------------------------------------------
 resource "aws_launch_configuration" "tf_lc" {
-  count = "${local.count_inst_asg}"
+  count = local.count_inst_asg
 
   # name     = "${lookup(var.instance_config_asg[count.index], "name")}"
-  image_id = "${data.aws_ami.ubuntu.id}"
+  image_id = data.aws_ami.ubuntu.id
 
-  instance_type        = "${lookup(var.instance_config_asg[count.index], "instance_type")}"
-  key_name             = "${aws_key_pair.generated_key.key_name}"
-  iam_instance_profile = "${aws_iam_instance_profile.ec2_s3_profile.name}"
+  instance_type        = lookup(var.instance_config_asg[count.index], "instance_type")
+  key_name             = aws_key_pair.generated_key.key_name
+  iam_instance_profile = aws_iam_instance_profile.ec2_s3_profile.name
 
   security_groups = ["${var.sg}.${lookup(var.instance_config[count.index], "security_group")}.${var.id}"]
 
-  user_data = "${element(data.template_file.user_data.*.rendered, count.index)}"
+  user_data = element(data.template_file.user_data.*.rendered, count.index)
 
   lifecycle {
     create_before_destroy = true
@@ -290,18 +275,18 @@ resource "aws_launch_configuration" "tf_lc" {
 # Create AWS autoscaling groups
 #---------------------------------------------------
 resource "aws_autoscaling_group" "tf_asg" {
-  count = "${local.count_inst_asg}"
+  count = local.count_inst_asg
 
   name                 = "${lookup(var.instance_config_asg[count.index], "name")} - ${element(aws_launch_configuration.tf_lc.*.name, count.index)}"
-  launch_configuration = "${element(aws_launch_configuration.tf_lc.*.name, count.index)}"
+  launch_configuration = element(aws_launch_configuration.tf_lc.*.name, count.index)
 
-  load_balancers = ["${lookup(var.elb_config[count.index], "name")}"]
+  load_balancers = [lookup(var.elb_config[count.index], "name")]
 
-  vpc_zone_identifier = ["${aws_subnet.private-subnet.id}", "${aws_subnet.private-subnet-2.id}"]
+  vpc_zone_identifier = [aws_subnet.private-subnet.id, aws_subnet.private-subnet-2.id]
 
-  min_size          = "${lookup(var.instance_config_asg[count.index], "min")}"
-  max_size          = "${lookup(var.instance_config_asg[count.index], "max")}"
-  desired_capacity = "${lookup(var.instance_config_asg[count.index], "desired")}"
+  min_size          = lookup(var.instance_config_asg[count.index], "min")
+  max_size          = lookup(var.instance_config_asg[count.index], "max")
+  desired_capacity = lookup(var.instance_config_asg[count.index], "desired")
 
   health_check_type = "ELB"
   health_check_grace_period = 300
@@ -312,7 +297,7 @@ resource "aws_autoscaling_group" "tf_asg" {
 
   tag {
     key                 = "Name"
-    value               = "${lookup(var.instance_config_asg[count.index], "name")}"
+    value               = lookup(var.instance_config_asg[count.index], "name")
     propagate_at_launch = true
   }
 }
@@ -322,7 +307,7 @@ resource "aws_autoscaling_group" "tf_asg" {
 #---------------------------------------------------
 
 resource "aws_acm_certificate" "cert" {
-  domain_name       = "${var.www_domain_name}"
+  domain_name       = var.www_domain_name
   validation_method = "DNS"
 
   lifecycle {
@@ -331,32 +316,32 @@ resource "aws_acm_certificate" "cert" {
 }
 
 data "aws_route53_zone" "zone" {
-  name         = "${var.www_domain_name}"
+  name         = var.www_domain_name
   private_zone = false
 }
 
 resource "aws_route53_record" "cert_validation" {
-  name    = "${aws_acm_certificate.cert.domain_validation_options.0.resource_record_name}"
-  type    = "${aws_acm_certificate.cert.domain_validation_options.0.resource_record_type}"
-  zone_id = "${data.aws_route53_zone.zone.id}"
-  records = ["${aws_acm_certificate.cert.domain_validation_options.0.resource_record_value}"]
+  name    = aws_acm_certificate.cert.domain_validation_options.0.resource_record_name
+  type    = aws_acm_certificate.cert.domain_validation_options.0.resource_record_type
+  zone_id = data.aws_route53_zone.zone.id
+  records = [aws_acm_certificate.cert.domain_validation_options.0.resource_record_value]
   ttl     = 60
 }
 
 resource "aws_acm_certificate_validation" "cert" {
-  certificate_arn         = "${aws_acm_certificate.cert.arn}"
-  validation_record_fqdns = ["${aws_route53_record.cert_validation.fqdn}"]
+  certificate_arn         = aws_acm_certificate.cert.arn
+  validation_record_fqdns = [aws_route53_record.cert_validation.fqdn]
 }
 
 #---------------------------------------------------
 # Create AWS Classic Elastic Load Balancer
 #---------------------------------------------------
 resource "aws_elb" "elb" {
-  count = "${local.count_elb}"
+  count = local.count_elb
 
-  depends_on = ["aws_acm_certificate_validation.cert"]
+  depends_on = [aws_acm_certificate_validation.cert]
 
-  name  = "${lookup(var.elb_config[count.index], "name")}"
+  name  = lookup(var.elb_config[count.index], "name")
 
   subnets = ["${lookup(var.elb_config[count.index], "subnet")=="private" ? aws_subnet.private-subnet.id : aws_subnet.public-subnet.id}", "${lookup(var.elb_config[count.index], "subnet")=="private" ? aws_subnet.private-subnet-2.id : aws_subnet.public-subnet-2.id}"]
 
@@ -368,7 +353,7 @@ resource "aws_elb" "elb" {
   connection_draining         = true
   connection_draining_timeout = 400
 
-  internal = "${lookup(var.elb_config[count.index], "internal")}"
+  internal = lookup(var.elb_config[count.index], "internal")
 
   health_check {
     healthy_threshold   = 2
@@ -390,25 +375,28 @@ resource "aws_elb" "elb" {
     lb_protocol        = "https"
     instance_port      = 8888
     instance_protocol  = "http"
-    ssl_certificate_id = "${aws_acm_certificate_validation.cert.certificate_arn}"
+    ssl_certificate_id = aws_acm_certificate_validation.cert.certificate_arn
   }
 
-  tags {
-    Name = "${lookup(var.elb_config[count.index], "name")}"
+  tags = {
+    Name = lookup(var.elb_config[count.index], "name")
   }
+}
 
 #---------------------------------------------------
 # Scaling Up - Policy and Alarm
 #---------------------------------------------------
 resource "aws_autoscaling_policy" "up_policy" {
+  count = local.count_inst_asg
   name = "up_policy"
   scaling_adjustment = 1
   adjustment_type = "ChangeInCapacity"
   cooldown = 300
-  autoscaling_group_name = "${aws_autoscaling_group.tf_asg.name}"
+  autoscaling_group_name = element(aws_autoscaling_group.tf_asg.*.name, count.index)
 }
 
 resource "aws_cloudwatch_metric_alarm" "web_cpu_alarm_up" {
+  count = local.count_inst_asg
   alarm_name = "alarm_cpu_up"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods = "2"
@@ -418,26 +406,28 @@ resource "aws_cloudwatch_metric_alarm" "web_cpu_alarm_up" {
   statistic = "Average"
   threshold = "80"
 
-  dimensions {
-    AutoScalingGroupName = "${aws_autoscaling_group.tf_asg.name}"
+  dimensions = {
+    AutoScalingGroupName = element(aws_autoscaling_group.tf_asg.*.name, count.index)
   }
 
   alarm_description = "CPU utilization EC2 - Up"
-  alarm_actions = ["${aws_autoscaling_policy.up_policy.arn}"]
+  alarm_actions = [element(aws_autoscaling_policy.up_policy.*.arn, count.index)]
 }
 
 #---------------------------------------------------
 # Scaling Down - Policy and Alarm
 #---------------------------------------------------
 resource "aws_autoscaling_policy" "down_policy" {
+  count = local.count_inst_asg
   name = "down_policy"
   scaling_adjustment = -1
   adjustment_type = "ChangeInCapacity"
   cooldown = 300
-  autoscaling_group_name = "${aws_autoscaling_group.tf_asg.name}"
+  autoscaling_group_name = element(aws_autoscaling_group.tf_asg.*.name, count.index)
 }
 
 resource "aws_cloudwatch_metric_alarm" "web_cpu_alarm_down" {
+  count = local.count_inst_asg
   alarm_name = "alarm_cpu_down"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods = "2"
@@ -447,45 +437,55 @@ resource "aws_cloudwatch_metric_alarm" "web_cpu_alarm_down" {
   statistic = "Average"
   threshold = "10"
 
-  dimensions {
-    AutoScalingGroupName = "${aws_autoscaling_group.tf_asg.name}"
+  dimensions = {
+    AutoScalingGroupName = element(aws_autoscaling_group.tf_asg.*.name, count.index)
   }
 
   alarm_description = "CPU utilization EC2 - Down"
-  alarm_actions = ["${aws_autoscaling_policy.down_policy.arn}"]
+  alarm_actions = [element(aws_autoscaling_policy.up_policy.*.arn, count.index)]
 }
+
+#---------------------------------------------------
+# Attach Autoscaling groups to elb
+#---------------------------------------------------
+resource "aws_autoscaling_attachment" "asg_attachment_bar" {
+  count = local.count_inst_asg
+  autoscaling_group_name = element(aws_autoscaling_group.tf_asg.*.id, count.index)
+  elb                    = element(aws_elb.elb.*.id, count.index)
+}
+
 #---------------------------------------------------
 # Create RDS DB for Wordpress
 #---------------------------------------------------
 resource "aws_db_instance" "db_wp" {
-  count = "${local.count_db}"
+  count = local.count_db
 
-  identifier             = "${lookup(var.rds_config[count.index], "identifier"}"
-  allocated_storage      = "${lookup(var.rds_config[count.index], "allocated_storage"}"
-  storage_type           = "${lookup(var.rds_config[count.index], "storage_type"}"
-  engine                 = "${lookup(var.rds_config[count.index], "engine"}"
-  engine_version         = "${lookup(var.rds_config[count.index], "engine_version"}"
-  instance_class         = "${lookup(var.rds_config[count.index], "instance_class"}"
-  name                   = "${lookup(var.rds_config[count.index], "name"}"
-  username               = "${lookup(var.rds_config[count.index], "UN"}"
-  password               = "${lookup(var.rds_config[count.index], "PW"}"
-  parameter_group_name   = "${lookup(var.rds_config[count.index], "parameter_group_name"}"
-  multi_az               = "${lookup(var.rds_config[count.index], "multi_az"}"
+  identifier             = lookup(var.rds_config[count.index], "identifier")
+  allocated_storage      = lookup(var.rds_config[count.index], "allocated_storage")
+  storage_type           = lookup(var.rds_config[count.index], "storage_type")
+  engine                 = lookup(var.rds_config[count.index], "engine")
+  engine_version         = lookup(var.rds_config[count.index], "engine_version")
+  instance_class         = lookup(var.rds_config[count.index], "instance_class")
+  name                   = lookup(var.rds_config[count.index], "name")
+  username               = lookup(var.rds_config[count.index], "UN")
+  password               = lookup(var.rds_config[count.index], "PW")
+  parameter_group_name   = lookup(var.rds_config[count.index], "parameter_group_name")
+  multi_az               = lookup(var.rds_config[count.index], "multi_az")
   vpc_security_group_ids = ["${var.sg}.${lookup(var.rds_config[count.index], "security_group")}.${var.id}"]
-  port                   = "${lookup(var.rds_config[count.index], "port"}"
+  port                   = lookup(var.rds_config[count.index], "port")
 
-  db_subnet_group_name   = "${aws_db_subnet_group.default.name}"
+  db_subnet_group_name   = aws_db_subnet_group.default.name
 
   s3_import {
-    source_engine         = "${lookup(var.rds_config[count.index], "engine"}"
-    source_engine_version = "${lookup(var.rds_config[count.index], "engine_version"}"
-    bucket_name           = "${var.s3_bucket_backup_name}"
-    bucket_prefix         = "${var.s3_bucket_db_prefix}"
-    ingestion_role        = "${aws_iam_role.ec2_s3_access_role.name}"
+    source_engine         = lookup(var.rds_config[count.index], "engine")
+    source_engine_version = lookup(var.rds_config[count.index], "engine_version")
+    bucket_name           = var.s3_bucket_backup_name
+    bucket_prefix         = var.s3_bucket_db_prefix
+    ingestion_role        = aws_iam_role.ec2_s3_access_role.name
   }
 
-  tags {
-    Name = "${lookup(var.rds_config[count.index], "name")}"
+  tags = {
+    Name = lookup(var.rds_config[count.index], "name")
   }
 
 }
@@ -506,37 +506,37 @@ data "aws_iam_policy_document" "media_public_access" {
 
     principals {
       type = "AWS"
-      identifiers = ["${aws_cloudfront_origin_access_identity.oai.iam_arn}"]
+      identifiers = [aws_cloudfront_origin_access_identity.oai.iam_arn]
     }
   }
 
   statement {
     actions = ["s3:ListBucket"]
-    resources = ["${aws_s3_bucket.media_assets.arn}"]
+    resources = [aws_s3_bucket.media_assets.arn]
 
     principals {
       type = "AWS"
-      identifiers = ["${aws_cloudfront_origin_access_identity.oai.iam_arn}"]
+      identifiers = [aws_cloudfront_origin_access_identity.oai.iam_arn]
     }
   }
 }
 
 resource "aws_s3_bucket_policy" "ma" {
-  bucket = "${aws_s3_bucket.media_assets.id}"
-  policy = "${data.aws_iam_policy_document.media_public_access.json}"
+  bucket = aws_s3_bucket.media_assets.id
+  policy = data.aws_iam_policy_document.media_public_access.json
 }
 
 resource "aws_cloudfront_distribution" "s3_distribution" {
 
-  depends_on = ["aws_acm_certificate_validation.cert"]
+  depends_on = [aws_acm_certificate_validation.cert]
 
   origin {
-    domain_name = "${aws_s3_bucket.media_assets.bucket_regional_domain_name}"
-    origin_id   = "${var.s3_origin_id}"
+    domain_name = aws_s3_bucket.media_assets.bucket_regional_domain_name
+    origin_id   = var.s3_origin_id
 
     # Respond to requests only from cloudfront
     s3_origin_config {
-      origin_access_identity = "${aws_cloudfront_origin_access_identity.oai.cloudfront_access_identity_path}"
+      origin_access_identity = aws_cloudfront_origin_access_identity.oai.cloudfront_access_identity_path
     }
   }
 
@@ -546,7 +546,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD"]
     cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "${var.s3_origin_id}"
+    target_origin_id = var.s3_origin_id
 
     forwarded_values {
       query_string = false
@@ -571,14 +571,14 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
     }
   }
 
-  aliases = ["${var.www_domain_name}"]
+  aliases = [var.www_domain_name]
 
   tags = {
     Environment = "cloudfront"
   }
 
   viewer_certificate {
-    acm_certificate_arn      = "${aws_acm_certificate_validation.cert.certificate_arn}"
+    acm_certificate_arn      = aws_acm_certificate_validation.cert.certificate_arn
     minimum_protocol_version = "TLSv1"
     ssl_support_method       = "sni-only"
   }
@@ -588,17 +588,17 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
 # Setup Route53
 #---------------------------------------------------
 data "aws_route53_zone" "mm" {
-  name = "${var.www_domain_name}"
+  name = var.www_domain_name
 }
 
 resource "aws_route53_record" "mm_alias_route53_record" {
-  zone_id = "${data.aws_route53_zone.mm.zone_id}"
-  name    = "${var.www_domain_name}"
+  zone_id = data.aws_route53_zone.mm.zone_id
+  name    = var.www_domain_name
   type    = "A"
 
   alias {
-    name                   = "${aws_elb.elb.domain_name}"
-    zone_id                = "${aws_elb.elb.hosted_zone_id}"
+    name                   = aws_elb.elb.0.dns_name
+    zone_id                = aws_elb.elb.0.zone_id
     evaluate_target_health = true
   }
 }
@@ -613,7 +613,7 @@ data "aws_instance" "bastion" {
     values = ["bastion"]
   }
 
-  depends_on = ["aws_instance.tf_example"]
+  depends_on = [aws_instance.tf_example]
 }
 
 

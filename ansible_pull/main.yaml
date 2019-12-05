@@ -39,6 +39,7 @@
       dest: "/{{ dest_folder }}/provisioners/{{ item }}.zip"
       mode: get
     with_items: "{{ ansible_roles }}"
+    when: item != 'nil'
     become: true
 
   - name: Install dependencies
@@ -54,20 +55,23 @@
       path: "/{{ dest_folder }}/provisioners/roles/{{ item }}"
       state: directory
     with_items: "{{ ansible_roles }}"
+    when: item != 'nil'
 
   - name: unzip role
     unarchive:
       src: "/{{ dest_folder }}/provisioners/{{ item }}.zip"
       dest: "/{{ dest_folder }}/provisioners/roles/{{ item }}"
     with_items: "{{ ansible_roles }}"
+    when: item != 'nil'
 
   - name: delete zip files
     file:
       dest: "/{{ dest_folder }}/provisioners/{{ item }}.zip"
       state: absent
     with_items: "{{ ansible_roles }}"
+    when: item != 'nil'
 
-  - name: install wordpress role
+  - name: install Wordpress role
     include_role:
       name: "{{ item }}"
     vars:
