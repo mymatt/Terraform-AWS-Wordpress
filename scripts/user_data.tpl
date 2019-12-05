@@ -2,10 +2,9 @@
 
 sudo mkdir -p /terraform/
 sudo chmod -R 755 /terraform/
-python --version || sudo apt-get update &&
-sudo apt-get -y install python python-pip
-sudo pip install --upgrade pip
-sudo pip install ansible boto3 botocore
+sudo /usr/bin/apt-get update
+sudo /usr/bin/apt-get -y install software-properties-common python-software-properties python-dev python-pip python-virtualenv libyaml-dev python-httplib2
+sudo /usr/bin/pip install ansible boto3 botocore hvac
 sudo echo "127.0.0.1 $(hostname)" >> /etc/hosts
 
 sudo cd /terraform/
