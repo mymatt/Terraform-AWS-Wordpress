@@ -125,7 +125,7 @@ variable "rds_config" {
 
   default = {
     "0" = {
-      identifier = "db_wp"
+      identifier = "db-wp"
 
       allocated_storage = 20
 
@@ -242,7 +242,7 @@ variable "id" {
 }
 
 variable "www_domain_name" {
-  default = "www.mattmyers.me"
+  default = "mattmyers.me"
 }
 
 variable "root_domain_name" {
