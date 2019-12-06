@@ -147,7 +147,7 @@ variable "rds_config" {
 
       multi_az = "false"
 
-      vpc_security_group_ids = "rds_sg"
+      vpc_security_group_ids = aws_security_group.rds_sg.id
 
       port = "3306"
     }

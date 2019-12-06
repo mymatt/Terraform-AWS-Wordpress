@@ -511,7 +511,7 @@ resource "aws_db_instance" "db_wp" {
   password               = lookup(var.rds_config[count.index], "PW")
   parameter_group_name   = lookup(var.rds_config[count.index], "parameter_group_name")
   multi_az               = lookup(var.rds_config[count.index], "multi_az")
-  vpc_security_group_ids = ["${var.sg}.${lookup(var.rds_config[count.index], "vpc_security_group_ids")}.${var.id}"]
+  vpc_security_group_ids = [lookup(var.rds_config[count.index], "vpc_security_group_ids")]
   port                   = lookup(var.rds_config[count.index], "port")
 
   db_subnet_group_name   = aws_db_subnet_group.default.name
