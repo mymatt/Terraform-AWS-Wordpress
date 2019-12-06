@@ -173,7 +173,7 @@ resource "null_resource" "web_db_migration" {
   depends_on = [aws_s3_bucket.backup, aws_s3_bucket.media_assets]
 
   provisioner "local-exec" {
-    command = "ansible-playbook --connection=local --inventory 127.0.0.1, ${var.migrate_playbook} -e 'media_bucket=${var.s3_bucket_media_name} backup_bucket=${var.s3_bucket_backup_name} bucket_prefix_db =${var.s3_bucket_db_prefix} bucket_prefix_www =${var.s3_bucket_www_prefix} bucket_backup_file =${var.s3_bucket_www_backup_file}' "
+    command = "ansible-playbook --connection=local --inventory 127.0.0.1, ${var.migrate_playbook} -e 'ansible_python_interpreter=/usr/bin/python3 media_bucket=${var.s3_bucket_media_name} backup_bucket=${var.s3_bucket_backup_name} bucket_prefix_db =${var.s3_bucket_db_prefix} bucket_prefix_www =${var.s3_bucket_www_prefix} bucket_backup_file =${var.s3_bucket_www_backup_file}' "
   }
   triggers = {
     before = aws_s3_bucket.backup.id
@@ -507,8 +507,8 @@ resource "aws_db_instance" "db_wp" {
   engine_version         = lookup(var.rds_config[count.index], "engine_version")
   instance_class         = lookup(var.rds_config[count.index], "instance_class")
   name                   = lookup(var.rds_config[count.index], "name")
-  username               = lookup(var.rds_config[count.index], "UN")
-  password               = lookup(var.rds_config[count.index], "PW")
+  username               = var.db-UN
+  password               = var.db-PW
   parameter_group_name   = lookup(var.rds_config[count.index], "parameter_group_name")
   multi_az               = lookup(var.rds_config[count.index], "multi_az")
   vpc_security_group_ids = [lookup(var.rds_config[count.index], "vpc_security_group_ids")]

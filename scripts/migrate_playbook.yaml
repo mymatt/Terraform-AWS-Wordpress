@@ -2,7 +2,7 @@
 ---
 - name: run web, db migration
   hosts: localhost
-  become: true
+  gather_facts: no
 
   vars:
     media_bucket: mb
