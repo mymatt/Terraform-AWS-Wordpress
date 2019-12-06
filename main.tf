@@ -19,6 +19,11 @@ provider "aws" {
   profile                 = var.ec2profile
 }
 
+provider "aws" {
+  alias = "east"
+  region = "us-east-1"
+}
+
 #---------------------------------------------------
 # Create SSH key for Bastion Access
 #---------------------------------------------------
@@ -139,7 +144,7 @@ resource "aws_iam_policy_attachment" "ec2-s3-attach" {
 #---------------------------------------------------
 
 resource "aws_s3_bucket" "media_assets" {
-  bucket = "s3_bucket_media_name"
+  bucket = var.s3_bucket_media_name
   acl    = "public-read"
 
   tags = {
@@ -152,7 +157,7 @@ resource "aws_s3_bucket" "media_assets" {
 #---------------------------------------------------
 
 resource "aws_s3_bucket" "backup" {
-  bucket = "s3_bucket_backup_name"
+  bucket = var.s3_bucket_backup_name
   acl    = "public-read"
 
   tags = {
@@ -168,7 +173,10 @@ resource "null_resource" "web_db_migration" {
   depends_on = [aws_s3_bucket.backup, aws_s3_bucket.media_assets]
 
   provisioner "local-exec" {
-    command = "ansible-playbook --connection=local 127.0.0.1, ${var.migrate_playbook} -e 'media_bucket=${var.s3_bucket_media_name} backup_bucket=${var.s3_bucket_backup_name} bucket_prefix_db =${var.s3_bucket_db_prefix} bucket_prefix_www =${var.s3_bucket_www_prefix} bucket_backup_file =${var.s3_bucket_www_backup_file}' "
+    command = "ansible-playbook --connection=local --inventory 127.0.0.1, ${var.migrate_playbook} -e 'media_bucket=${var.s3_bucket_media_name} backup_bucket=${var.s3_bucket_backup_name} bucket_prefix_db =${var.s3_bucket_db_prefix} bucket_prefix_www =${var.s3_bucket_www_prefix} bucket_backup_file =${var.s3_bucket_www_backup_file}' "
+  }
+  triggers = {
+    before = aws_s3_bucket.backup.id
   }
 }
 
@@ -241,7 +249,7 @@ resource "aws_instance" "tf_example" {
   instance_type          = lookup(var.instance_config[count.index], "instance_type")
   key_name               = aws_key_pair.generated_key.key_name
   iam_instance_profile   = aws_iam_instance_profile.ec2_s3_profile.name
-  vpc_security_group_ids = ["${var.sg}.${lookup(var.instance_config[count.index], "security_group")}.${var.id}"]
+  vpc_security_group_ids = [aws_security_group.bastion_sg_pub.id]
   subnet_id              = lookup(var.instance_config[count.index], "subnet")=="private" ? aws_subnet.private-subnet.id : aws_subnet.public-subnet.id
 
   tags = {
@@ -262,7 +270,8 @@ resource "aws_launch_configuration" "tf_lc" {
   key_name             = aws_key_pair.generated_key.key_name
   iam_instance_profile = aws_iam_instance_profile.ec2_s3_profile.name
 
-  security_groups = ["${var.sg}.${lookup(var.instance_config[count.index], "security_group")}.${var.id}"]
+  security_groups = [aws_security_group.web_sg.id]
+
 
   user_data = element(data.template_file.user_data.*.rendered, count.index)
 
@@ -303,7 +312,7 @@ resource "aws_autoscaling_group" "tf_asg" {
 }
 
 #---------------------------------------------------
-# Certificate Management
+# Certificate Management ELB
 #---------------------------------------------------
 
 resource "aws_acm_certificate" "cert" {
@@ -334,6 +343,35 @@ resource "aws_acm_certificate_validation" "cert" {
 }
 
 #---------------------------------------------------
+# Certificate Management Cloudfront
+#---------------------------------------------------
+
+resource "aws_acm_certificate" "cert2" {
+  provider = aws.east
+  domain_name       = var.www_domain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "cert_validation2" {
+  provider = aws.east
+  name    = aws_acm_certificate.cert2.domain_validation_options.0.resource_record_name
+  type    = aws_acm_certificate.cert2.domain_validation_options.0.resource_record_type
+  zone_id = data.aws_route53_zone.zone.id
+  records = [aws_acm_certificate.cert2.domain_validation_options.0.resource_record_value]
+  ttl     = 60
+}
+
+resource "aws_acm_certificate_validation" "cert2" {
+  provider = aws.east
+  certificate_arn         = aws_acm_certificate.cert2.arn
+  validation_record_fqdns = [aws_route53_record.cert_validation2.fqdn]
+}
+
+#---------------------------------------------------
 # Create AWS Classic Elastic Load Balancer
 #---------------------------------------------------
 resource "aws_elb" "elb" {
@@ -345,7 +383,7 @@ resource "aws_elb" "elb" {
 
   subnets = ["${lookup(var.elb_config[count.index], "subnet")=="private" ? aws_subnet.private-subnet.id : aws_subnet.public-subnet.id}", "${lookup(var.elb_config[count.index], "subnet")=="private" ? aws_subnet.private-subnet-2.id : aws_subnet.public-subnet-2.id}"]
 
-  security_groups = ["${var.sg}.${lookup(var.elb_config[count.index], "security_group")}.${var.id}"]
+  security_groups = [aws_security_group.elb_web_sg.id]
 
   cross_zone_load_balancing = true
 
@@ -460,6 +498,8 @@ resource "aws_autoscaling_attachment" "asg_attachment_bar" {
 resource "aws_db_instance" "db_wp" {
   count = local.count_db
 
+  depends_on = [null_resource.web_db_migration]
+
   identifier             = lookup(var.rds_config[count.index], "identifier")
   allocated_storage      = lookup(var.rds_config[count.index], "allocated_storage")
   storage_type           = lookup(var.rds_config[count.index], "storage_type")
@@ -528,7 +568,7 @@ resource "aws_s3_bucket_policy" "ma" {
 
 resource "aws_cloudfront_distribution" "s3_distribution" {
 
-  depends_on = [aws_acm_certificate_validation.cert]
+  depends_on = [aws_acm_certificate_validation.cert2]
 
   origin {
     domain_name = aws_s3_bucket.media_assets.bucket_regional_domain_name
@@ -578,7 +618,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   }
 
   viewer_certificate {
-    acm_certificate_arn      = aws_acm_certificate_validation.cert.certificate_arn
+    acm_certificate_arn      = aws_acm_certificate_validation.cert2.certificate_arn
     minimum_protocol_version = "TLSv1"
     ssl_support_method       = "sni-only"
   }

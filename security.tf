@@ -3,7 +3,7 @@
 #---------------------------------------------------
 
 resource "aws_security_group" "bastion_sg_pub" {
-  name = "bastion_sec_pub"
+  name = "bastion_sg_pub"
 
   vpc_id = aws_vpc.default.id
 
@@ -44,7 +44,7 @@ resource "aws_security_group" "bastion_sg_pub" {
 }
 
 resource "aws_security_group" "elb_web_sg" {
-  name = "elb_web_sec"
+  name = "elb_web_sg"
 
   depends_on = [aws_security_group.bastion_sg_pub]
 
@@ -80,7 +80,7 @@ resource "aws_security_group" "elb_web_sg" {
 }
 
 resource "aws_security_group" "web_sg" {
-  name = "web_sec"
+  name = "web_sg"
 
   depends_on = [aws_security_group.bastion_sg_pub, aws_security_group.elb_web_sg]
 
@@ -116,7 +116,7 @@ resource "aws_security_group" "web_sg" {
 }
 
 resource "aws_security_group" "rds_sg" {
-  name = "rds_sec"
+  name = "rds_sg"
 
   vpc_id = aws_vpc.default.id
 
