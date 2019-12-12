@@ -14,10 +14,14 @@ s3_bucket_backup: backup
 
 mysql_dir: /var/lib/mysql/wordpress
 
-percona_target_dir: /temp
+percona_target_dir: /tmp/percona
 
 db_prefix: perconabackup
 
 vault_token: "{{ lookup('env','VAULT_TOKEN') }}"
 
 vault_server: "{{ lookup('env','VAULT_ADDR') }}"
+
+perc_user: pu
+
+perc_pass: pp

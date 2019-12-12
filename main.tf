@@ -145,7 +145,7 @@ resource "aws_iam_policy_attachment" "ec2-s3-attach" {
 
 resource "aws_s3_bucket" "media_assets" {
   bucket = var.s3_bucket_media_name
-  acl    = "public-read"
+  acl    = "private"
 
   tags = {
     Name = "Media_Assets"
@@ -158,7 +158,7 @@ resource "aws_s3_bucket" "media_assets" {
 
 resource "aws_s3_bucket" "backup" {
   bucket = var.s3_bucket_backup_name
-  acl    = "public-read"
+  acl    = "private"
 
   tags = {
     Name = "Backups"
@@ -173,8 +173,13 @@ resource "null_resource" "web_db_migration" {
   depends_on = [aws_s3_bucket.backup, aws_s3_bucket.media_assets]
 
   provisioner "local-exec" {
-    command = "ansible-playbook --connection=local --inventory 127.0.0.1, ${var.migrate_playbook} -e 'ansible_python_interpreter=/usr/bin/python3 media_bucket=${var.s3_bucket_media_name} backup_bucket=${var.s3_bucket_backup_name} bucket_prefix_db =${var.s3_bucket_db_prefix} bucket_prefix_www =${var.s3_bucket_www_prefix} bucket_backup_file =${var.s3_bucket_www_backup_file}' "
+    command = "pip install hvac"
   }
+
+  provisioner "local-exec" {
+    command = "ansible-playbook --connection=local --inventory 127.0.0.1, ${var.migrate_playbook} -vv -e 'ansible_python_interpreter=/usr/bin/python3 media_bucket=${var.s3_bucket_media_name} backup_bucket=${var.s3_bucket_backup_name} bucket_prefix_db=${var.s3_bucket_db_prefix} bucket_prefix_www=${var.s3_bucket_www_prefix} bucket_backup_file=${var.s3_bucket_www_backup_file} db_user=${var.db-UN} db_pass=${var.db-PW}' "
+  }
+
   triggers = {
     before = aws_s3_bucket.backup.id
   }
@@ -286,7 +291,9 @@ resource "aws_launch_configuration" "tf_lc" {
 resource "aws_autoscaling_group" "tf_asg" {
   count = local.count_inst_asg
 
-  name                 = "${lookup(var.instance_config_asg[count.index], "name")} - ${element(aws_launch_configuration.tf_lc.*.name, count.index)}"
+  depends_on = [aws_elb.elb]
+
+  name                 = "${lookup(var.instance_config_asg[count.index], "name")}-${element(aws_launch_configuration.tf_lc.*.name, count.index)}"
   launch_configuration = element(aws_launch_configuration.tf_lc.*.name, count.index)
 
   load_balancers = [lookup(var.elb_config[count.index], "name")]
@@ -511,7 +518,7 @@ resource "aws_db_instance" "db_wp" {
   password               = var.db-PW
   parameter_group_name   = lookup(var.rds_config[count.index], "parameter_group_name")
   multi_az               = lookup(var.rds_config[count.index], "multi_az")
-  vpc_security_group_ids = [lookup(var.rds_config[count.index], "vpc_security_group_ids")]
+  vpc_security_group_ids = [aws_security_group.rds_sg.id]
   port                   = lookup(var.rds_config[count.index], "port")
 
   db_subnet_group_name   = aws_db_subnet_group.default.name
@@ -521,7 +528,7 @@ resource "aws_db_instance" "db_wp" {
     source_engine_version = lookup(var.rds_config[count.index], "engine_version")
     bucket_name           = var.s3_bucket_backup_name
     bucket_prefix         = var.s3_bucket_db_prefix
-    ingestion_role        = aws_iam_role.ec2_s3_access_role.name
+    ingestion_role        = aws_iam_role.ec2_s3_access_role.arn
   }
 
   tags = {
@@ -568,7 +575,7 @@ resource "aws_s3_bucket_policy" "ma" {
 
 resource "aws_cloudfront_distribution" "s3_distribution" {
 
-  depends_on = [aws_acm_certificate_validation.cert2]
+  depends_on = [aws_elb.elb, aws_db_instance.db_wp, aws_acm_certificate_validation.cert2]
 
   origin {
     domain_name = aws_s3_bucket.media_assets.bucket_regional_domain_name

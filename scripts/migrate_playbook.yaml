@@ -2,7 +2,6 @@
 ---
 - name: run web, db migration
   hosts: localhost
-  gather_facts: no
 
   vars:
     media_bucket: mb
@@ -10,6 +9,8 @@
     bucket_prefix_db: bpd
     bucket_prefix_www: bpw
     bucket_backup_file: bbf
+    db_user: dbu
+    db_pass: dbp
 
   tasks:
 
@@ -22,3 +23,5 @@
       db_prefix: "{{ bucket_prefix_db }}"
       www_prefix: "{{ bucket_prefix_www }}"
       backup_file: "{{ bucket_backup_file }}"
+      perc_user: "{{ db_user }}"
+      perc_pass: "{{ db_pass }}"

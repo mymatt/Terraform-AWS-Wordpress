@@ -1,5 +1,10 @@
 ---
 
+- name: Install package
+  apt:
+    name:
+      - software-properties-common
+
 # Move apache files to S3 Bucket
 - name: Compress directory
   archive:
@@ -10,7 +15,7 @@
 
 - name: get Vault aws secret credentials
   set_fact:
-    aws_cred: "{{ lookup('hashi_vault', 'secret=kv/aws token={{ vault_token }} url=https://{{ vault_server }}:8200 validate_certs=false') }}"
+    aws_cred: "{{ lookup('hashi_vault', 'secret=secret/aws token={{ vault_token }} url={{ vault_server }} validate_certs=false') }}"
 
 - name: put web server files in s3 bucket
   aws_s3:
@@ -20,35 +25,30 @@
     object: "/{{ www_prefix }}/{{ backup_file }}"
     src: "/{{ dest_dir }}/{{ backup_file }}"
     mode: put
-  become: true
 
 # move images to s3 bucket used for cloudfront
 - name: put web images in S3 bucket
   s3_sync:
     aws_access_key: "{{ aws_cred.AWS_ACCESS_KEY_ID }}"
     aws_secret_key: "{{ aws_cred.AWS_SECRET_ACCESS_KEY }}"
-    bucket: "{{ s3bucket_media }}"
+    bucket: "{{ s3_bucket_media }}"
     file_root: "{{ www_dir }}/wp-content/uploads"
 
 # backup db and move to s3 bucket
 - name: "Adding percona repository"
   apt_repository:
     repo: "deb http://repo.percona.com/apt {{ ansible_distribution_release }} main"
-    state: "present"
-
-- name: update apt cache
-  become: true
-  apt:
     update_cache: yes
+    state: "present"
+  become: true
 
 - name: install percona
-  become: true
   apt:
-    name: "percona-xtrabackup"
+    name: "percona-xtrabackup-80"
     state: present
 
 - name: perform percona backup
-  command: "xtrabackup --backup --datadir={{ mysql_dir }} --target-dir={{ percona_target_dir }}"
+  command: "xtrabackup --backup --user={{ perc_user }} --password={{ perc_pass }} --datadir={{ mysql_dir }} --target-dir={{ percona_target_dir }}"
   become: true
 
 - name: put percona backup files in s3 bucket
@@ -57,4 +57,4 @@
     aws_secret_key: "{{ aws_cred.AWS_SECRET_ACCESS_KEY }}"
     bucket: "{{ s3_bucket_backup }}"
     file_root: "{{ percona_target_dir }}"
-    key_prefix: "/{{ db_prefix }}"
+    key_prefix: "{{ db_prefix }}"

@@ -124,6 +124,6 @@ resource "aws_security_group" "rds_sg" {
     from_port   = var.rds_port
     to_port     = var.rds_port
     protocol    = "tcp"
-    cidr_blocks = [aws_vpc.default.cidr_block]
+    security_groups = [aws_security_group.web_sg.id]
   }
 }
