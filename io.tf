@@ -133,11 +133,11 @@ variable "rds_config" {
 
       engine = "mysql"
 
-      engine_version = "5.7"
+      engine_version = "5.7.26"
 
       instance_class = "db.t2.medium"
 
-      name = "db_wp"
+      name = "db-wp"
 
       UN = ""
 

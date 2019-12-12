@@ -44,7 +44,7 @@
 
 - name: install percona
   apt:
-    name: "percona-xtrabackup-80"
+    name: "percona-xtrabackup"
     state: present
 
 - name: perform percona backup
