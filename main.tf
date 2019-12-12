@@ -172,9 +172,13 @@ resource "aws_s3_bucket" "backup" {
 resource "null_resource" "web_db_migration" {
   depends_on = [aws_s3_bucket.backup, aws_s3_bucket.media_assets]
 
-  provisioner "local-exec" {
-    command = "pip install hvac"
-  }
+  # provisioner "local-exec" {
+  #   command = "sudo /usr/bin/apt-get -y install software-properties-common python3-dev python3 python3-pip python3-virtualenv libyaml-dev python3-httplib2"
+  # }
+  #
+  # provisioner "local-exec" {
+  #   command = "sudo /usr/bin/pip3 install ansible boto3 botocore hvac"
+  # }
 
   provisioner "local-exec" {
     command = "ansible-playbook --connection=local --inventory 127.0.0.1, ${var.migrate_playbook} -vv -e 'ansible_python_interpreter=/usr/bin/python3 media_bucket=${var.s3_bucket_media_name} backup_bucket=${var.s3_bucket_backup_name} bucket_prefix_db=${var.s3_bucket_db_prefix} bucket_prefix_www=${var.s3_bucket_www_prefix} bucket_backup_file=${var.s3_bucket_www_backup_file} db_user=${var.db-UN} db_pass=${var.db-PW}' "
