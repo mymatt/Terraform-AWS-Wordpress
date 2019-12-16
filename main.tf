@@ -42,19 +42,24 @@ resource "local_file" "vpc_id" {
   filename = "${var.key_name}.pem"
 
   provisioner "local-exec" {
-    command = "chmod 400 ${var.key_name}.pem"
+    command = "chmod 600 ${var.key_name}.pem"
   }
 }
 
 #---------------------------------------------------
-# Setup IAM policies for accessing AWS S3, EC2, and Loadbalancers
+# Setup IAM policies for accessing AWS S3, EC2, RDS and Loadbalancers
 #---------------------------------------------------
-resource "aws_iam_role" "ec2_s3_access_role" {
-  name               = "s3_role"
-  assume_role_policy = data.aws_iam_policy_document.policy.json
+resource "aws_iam_role" "ec2_access_role" {
+  name               = "ec2_role"
+  assume_role_policy = data.aws_iam_policy_document.ec2policy.json
 }
 
-data "aws_iam_policy_document" "policy" {
+resource "aws_iam_role" "rds_access_role" {
+  name               = "rds_role"
+  assume_role_policy = data.aws_iam_policy_document.rdspolicy.json
+}
+
+data "aws_iam_policy_document" "ec2policy" {
   statement {
     effect = "Allow"
 
@@ -69,6 +74,16 @@ data "aws_iam_policy_document" "policy" {
         "ec2.amazonaws.com",
       ]
     }
+  }
+}
+
+data "aws_iam_policy_document" "rdspolicy" {
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "sts:AssumeRole",
+    ]
 
     principals {
       type = "Service"
@@ -80,15 +95,21 @@ data "aws_iam_policy_document" "policy" {
   }
 }
 
-resource "aws_iam_instance_profile" "ec2_s3_profile" {
-  name = "s3_iam_profile"
-  role = aws_iam_role.ec2_s3_access_role.name
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "ec2_iam_profile"
+  role = aws_iam_role.ec2_access_role.name
 }
 
-data "aws_iam_policy_document" "ec2_s3_access" {
+resource "aws_iam_instance_profile" "rds_profile" {
+  name = "rds_iam_profile"
+  role = aws_iam_role.rds_access_role.name
+}
+
+data "aws_iam_policy_document" "ec2_access" {
   statement {
     effect = "Allow"
     actions = [
+      "s3:ListBucket",
       "s3:ListAllMyBuckets",
       "s3:GetBucketLocation",
       "s3:PutObject",
@@ -101,25 +122,7 @@ data "aws_iam_policy_document" "ec2_s3_access" {
   statement {
     effect = "Allow"
     actions = [
-      "s3:*",
-    ]
-    resources = [
-      "*",
-    ]
-  }
-  statement {
-    effect = "Allow"
-    actions = [
-      "ec2:DescribeInstances",
-    ]
-    resources = [
-      "*",
-    ]
-  }
-  statement {
-    effect = "Allow"
-    actions = [
-      "elasticloadbalancing:DescribeLoadBalancers",
+      "rds:Describe*",
     ]
     resources = [
       "*",
@@ -127,16 +130,44 @@ data "aws_iam_policy_document" "ec2_s3_access" {
   }
 }
 
-resource "aws_iam_policy" "allow_ec2_s3_access_policy" {
-  name        = "s3_policy"
-  description = "A s3 test policy"
-  policy      = data.aws_iam_policy_document.ec2_s3_access.json
+data "aws_iam_policy_document" "rds_access" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "s3:ListBucket",
+      "s3:ListAllMyBuckets",
+      "s3:GetBucketLocation",
+      "s3:PutObject",
+      "s3:GetObject",
+    ]
+    resources = [
+      "arn:aws:s3:::*",
+    ]
+  }
 }
 
-resource "aws_iam_policy_attachment" "ec2-s3-attach" {
-  name       = "s3_attach_policy"
-  roles      = [aws_iam_role.ec2_s3_access_role.name]
-  policy_arn = aws_iam_policy.allow_ec2_s3_access_policy.arn
+resource "aws_iam_policy" "allow_ec2_access_policy" {
+  name        = "ec2_policy"
+  description = "A ec2 policy"
+  policy      = data.aws_iam_policy_document.ec2_access.json
+}
+
+resource "aws_iam_policy" "allow_rds_access_policy" {
+  name        = "rds_policy"
+  description = "A rds policy"
+  policy      = data.aws_iam_policy_document.rds_access.json
+}
+
+resource "aws_iam_policy_attachment" "ec2-attach" {
+  name       = "ec2_attach_policy"
+  roles      = [aws_iam_role.ec2_access_role.name]
+  policy_arn = aws_iam_policy.allow_ec2_access_policy.arn
+}
+
+resource "aws_iam_policy_attachment" "rds-attach" {
+  name       = "rds_attach_policy"
+  roles      = [aws_iam_role.rds_access_role.name]
+  policy_arn = aws_iam_policy.allow_rds_access_policy.arn
 }
 
 #---------------------------------------------------
@@ -257,7 +288,7 @@ resource "aws_instance" "tf_example" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = lookup(var.instance_config[count.index], "instance_type")
   key_name               = aws_key_pair.generated_key.key_name
-  iam_instance_profile   = aws_iam_instance_profile.ec2_s3_profile.name
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
   vpc_security_group_ids = [aws_security_group.bastion_sg_pub.id]
   subnet_id              = lookup(var.instance_config[count.index], "subnet")=="private" ? aws_subnet.private-subnet.id : aws_subnet.public-subnet.id
 
@@ -277,7 +308,7 @@ resource "aws_launch_configuration" "tf_lc" {
 
   instance_type        = lookup(var.instance_config_asg[count.index], "instance_type")
   key_name             = aws_key_pair.generated_key.key_name
-  iam_instance_profile = aws_iam_instance_profile.ec2_s3_profile.name
+  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
 
   security_groups = [aws_security_group.web_sg.id]
 
@@ -369,6 +400,7 @@ resource "aws_acm_certificate" "cert2" {
 
 resource "aws_route53_record" "cert_validation2" {
   provider = aws.east
+  allow_overwrite = true
   name    = aws_acm_certificate.cert2.domain_validation_options.0.resource_record_name
   type    = aws_acm_certificate.cert2.domain_validation_options.0.resource_record_type
   zone_id = data.aws_route53_zone.zone.id
@@ -526,13 +558,15 @@ resource "aws_db_instance" "db_wp" {
   port                   = lookup(var.rds_config[count.index], "port")
 
   db_subnet_group_name   = aws_db_subnet_group.default.name
+  auto_minor_version_upgrade = false
+
 
   s3_import {
     source_engine         = lookup(var.rds_config[count.index], "engine")
     source_engine_version = lookup(var.rds_config[count.index], "engine_version")
     bucket_name           = var.s3_bucket_backup_name
     bucket_prefix         = var.s3_bucket_db_prefix
-    ingestion_role        = aws_iam_role.ec2_s3_access_role.arn
+    ingestion_role        = aws_iam_role.rds_access_role.arn
   }
 
   tags = {
