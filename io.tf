@@ -125,7 +125,7 @@ variable "rds_config" {
 
   default = {
     "0" = {
-      identifier = "db-wp"
+      identifier = "dbwp"
 
       allocated_storage = 20
 
@@ -133,11 +133,11 @@ variable "rds_config" {
 
       engine = "mysql"
 
-      engine_version = "5.7.26"
+      engine_version = "5.7.22"
 
-      instance_class = "db.t2.medium"
+      instance_class = "db.t2.micro"
 
-      name = "db-wp"
+      name = "dbwp"
 
       UN = ""
 
