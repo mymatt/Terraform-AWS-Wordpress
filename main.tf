@@ -250,7 +250,7 @@ locals {
 data "template_file" "user_data" {
   count = local.count_inst
 
-  template = "${file("scripts/user_data.tpl")}"
+  template = "${file("provisioners/user_data.tpl")}"
 
   vars = {
     tr_git_address   = "${var.git_address}"
