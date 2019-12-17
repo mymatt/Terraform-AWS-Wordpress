@@ -2,8 +2,8 @@
 
 - Automates the process of Migrating an existing local wordpress site (using mysql) to AWS Creating a new Wordpress site running on EC2 instances with images served via a cloudfront distribution from an S3 bucket and an RDS database
 - Terraform creates and manages the AWS infrastructure, with Ansible providing provisioning.
-- HTTPS is setup using AWS Certificate Managers which validates and manages certificates on the Elastic Load Balancer, which uses the SNI protocol. Validation via DNS
-- Regarding the DB migration, Terraform RDS S3 Import process (using RestoreDBInstanceFromS3) is automated whereby DB content is backed up to an S3 bucket using percona and then loaded into a new RDS instance
+- HTTPS is setup using AWS Certificate Manager which validates and manages certificates on the Elastic Load Balancer, which uses the SNI protocol, and on the Cloudfront distribution. Validation via DNS
+- Regarding the DB migration, Terraform RDS S3 Import process (using RestoreDBInstanceFromS3) is automated whereby DB content is backed up to an S3 bucket using percona and then loaded into a new RDS instance. RestoreDBInstanceFromS3 uses mysql 5.7.22
 - Autoscaling group with Cloudwatch metrics based on CPU Utilization are created.
 - terraform user_data & template are used for provisioning
 - ansible-pull is used to pull an ansible playbook from github that then retrieves and executes a set of ansible roles from an s3 bucket
@@ -32,7 +32,10 @@ region = us-east-2
 ```
 or ~/.bashrc
 ```
-
+export AWS_REGION='ap-southeast-2'
+export AWS_PROFILE=xxxx
+export AWS_ACCESS_KEY_ID=xxxxx
+export AWS_SECRET_ACCESS_KEY=xxxxxx
 ```
 
 3. Vault Server setup with details contained within ~/.bashrc
@@ -40,8 +43,14 @@ or ~/.bashrc
 export VAULT_ADDR=xxxxxxx
 export VAULT_TOKEN=xxxxxxx
 ```
+Add the following keys
+```
+vault kv put secret/aws AWS_ACCESS_KEY_ID=xxxxxxx AWS_SECRET_ACCESS_KEY=xxxxxxxx
+```
 
 See https://github.com/mymatt/Vault for setting up local vault server
+
+NOTE: This project uses 2 methods for retrieving AWS credentials, purely for demonstration purposes. One can remove vault references and use the credentials setup at ~/.aws
 
 4. Change variables in io.tf file for aws profile, credentials file, s3 bucket, and for ones own domain name:
 ```
