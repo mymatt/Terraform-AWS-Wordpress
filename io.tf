@@ -135,7 +135,7 @@ variable "rds_config" {
 
       engine_version = "5.7.22"
 
-      instance_class = "db.t2.micro"
+      instance_class = "db.t2.medium"
 
       name = "dbwp"
 

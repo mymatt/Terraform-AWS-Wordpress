@@ -117,7 +117,7 @@ data "aws_iam_policy_document" "ec2_access" {
   statement {
     effect = "Allow"
     actions = [
-      "rds:Describe*",
+      "rds:*",
     ]
     resources = [
       "*",
@@ -256,8 +256,8 @@ data "template_file" "user_data" {
     tr_git_address   = "${var.git_address}"
     tr_region        = "${var.region}"
     tr_s3bucket      = "${var.s3_bucket_name}"
-    tr_ip            = "${lookup(var.instance_config[count.index], "subnet")=="private" ? cidrhost(var.private_subnet_cidr, count.index + 21) : cidrhost(var.public_subnet_cidr, count.index + 21)}"
-    tr_ansible_roles = "${jsonencode(var.role_profiles[lookup(var.instance_config[count.index], "roles")])}"
+    tr_ip            = "${lookup(var.instance_config_asg[count.index], "subnet")=="private" ? cidrhost(var.private_subnet_cidr, count.index + 21) : cidrhost(var.public_subnet_cidr, count.index + 21)}"
+    tr_ansible_roles = "${jsonencode(var.role_profiles[lookup(var.instance_config_asg[count.index], "roles")])}"
 
     tr_rds_identifier = "${lookup(var.rds_config[count.index], "identifier")}"
     tr_db_name = "${lookup(var.rds_config[count.index], "name")}"

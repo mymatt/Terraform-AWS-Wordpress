@@ -52,7 +52,7 @@
 
   - name: create folder
     file:
-      path: "/{{ dest_folder }}/provisioners/roles/{{ item }}"
+      path: "/{{ dest_folder }}/provisioners/scripts/roles/{{ item }}"
       state: directory
     with_items: "{{ ansible_roles }}"
     when: item != 'nil'
@@ -60,7 +60,7 @@
   - name: unzip role
     unarchive:
       src: "/{{ dest_folder }}/provisioners/{{ item }}.zip"
-      dest: "/{{ dest_folder }}/provisioners/roles/{{ item }}"
+      dest: "/{{ dest_folder }}/provisioners/scripts/roles/{{ item }}"
     with_items: "{{ ansible_roles }}"
     when: item != 'nil'
 
