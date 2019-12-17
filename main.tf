@@ -100,11 +100,6 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   role = aws_iam_role.ec2_access_role.name
 }
 
-resource "aws_iam_instance_profile" "rds_profile" {
-  name = "rds_iam_profile"
-  role = aws_iam_role.rds_access_role.name
-}
-
 data "aws_iam_policy_document" "ec2_access" {
   statement {
     effect = "Allow"
