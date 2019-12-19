@@ -1,7 +1,7 @@
 ---
 - name: download and install roles
   hosts: localhost
-  gather_facts: false
+  gather_facts: true
 
   vars:
     dest_folder: terraform

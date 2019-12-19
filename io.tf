@@ -43,11 +43,11 @@ variable "s3_bucket_www_prefix" {
 }
 
 variable "s3_bucket_www_backup_file" {
-  default = "backup.tgz"
+  default = "wordpress.tgz"
 }
 
 variable "migrate_playbook" {
-  default = "scripts/migrate_playbook.yaml"
+  default = "provisioners/migrate_playbook.yaml"
 }
 
 variable "instance_type" {
@@ -218,7 +218,7 @@ variable "git_address" {
 }
 
 variable "ami_name" {
-  default = "ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-*"
+  default = "ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-*"
 }
 
 variable "ami_type" {

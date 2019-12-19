@@ -247,7 +247,7 @@ locals {
 #---------------------------------------------------
 # Setup template file for shell and ansible provisioning
 #---------------------------------------------------
-data "template_file" "user_data" {
+data "template_file" "userdata" {
   count = local.count_inst
 
   template = "${file("provisioners/user_data.tpl")}"
@@ -261,8 +261,8 @@ data "template_file" "user_data" {
 
     tr_rds_identifier = "${lookup(var.rds_config[count.index], "identifier")}"
     tr_db_name = "${lookup(var.rds_config[count.index], "name")}"
-    tr_db_username = "${lookup(var.rds_config[count.index], "UN")}"
-    tr_db_password = "${lookup(var.rds_config[count.index], "PW")}"
+    tr_db_username = "${var.db-UN}"
+    tr_db_password = "${var.db-PW}"
 
     tr_cloudfront_url = "${var.www_domain_name}"
 
@@ -272,6 +272,7 @@ data "template_file" "user_data" {
 
   }
 }
+
 
 #---------------------------------------------------
 # Create single EC2 instances not in ASG: bastion
@@ -297,7 +298,7 @@ resource "aws_instance" "tf_example" {
 #---------------------------------------------------
 resource "aws_launch_configuration" "tf_lc" {
   count = local.count_inst_asg
-
+  depends_on = [null_resource.web_db_migration]
   # name     = "${lookup(var.instance_config_asg[count.index], "name")}"
   image_id = data.aws_ami.ubuntu.id
 
@@ -307,8 +308,9 @@ resource "aws_launch_configuration" "tf_lc" {
 
   security_groups = [aws_security_group.web_sg.id]
 
+  associate_public_ip_address = true
 
-  user_data = element(data.template_file.user_data.*.rendered, count.index)
+  user_data = element(data.template_file.userdata.*.rendered, count.index)
 
   lifecycle {
     create_before_destroy = true
@@ -328,7 +330,7 @@ resource "aws_autoscaling_group" "tf_asg" {
 
   load_balancers = [lookup(var.elb_config[count.index], "name")]
 
-  vpc_zone_identifier = [aws_subnet.private-subnet.id, aws_subnet.private-subnet-2.id]
+  vpc_zone_identifier = [aws_subnet.public-subnet.id, aws_subnet.public-subnet-2.id]
 
   min_size          = lookup(var.instance_config_asg[count.index], "min")
   max_size          = lookup(var.instance_config_asg[count.index], "max")
@@ -475,10 +477,10 @@ resource "aws_cloudwatch_metric_alarm" "web_cpu_alarm_up" {
   count = local.count_inst_asg
   alarm_name = "alarm_cpu_up"
   comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods = "2"
+  evaluation_periods = "5"
   metric_name = "CPUUtilization"
   namespace = "AWS/EC2"
-  period = "120"
+  period = "300"
   statistic = "Average"
   threshold = "80"
 
@@ -506,10 +508,10 @@ resource "aws_cloudwatch_metric_alarm" "web_cpu_alarm_down" {
   count = local.count_inst_asg
   alarm_name = "alarm_cpu_down"
   comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods = "2"
+  evaluation_periods = "5"
   metric_name = "CPUUtilization"
   namespace = "AWS/EC2"
-  period = "120"
+  period = "300"
   statistic = "Average"
   threshold = "10"
 
