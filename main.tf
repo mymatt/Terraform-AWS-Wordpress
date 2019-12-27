@@ -142,13 +142,13 @@ data "aws_iam_policy_document" "rds_access" {
 }
 
 resource "aws_iam_policy" "allow_ec2_access_policy" {
-  name        = "ec2_policy"
+  name        = "ec2policy"
   description = "A ec2 policy"
   policy      = data.aws_iam_policy_document.ec2_access.json
 }
 
 resource "aws_iam_policy" "allow_rds_access_policy" {
-  name        = "rds_policy"
+  name        = "rdspolicy"
   description = "A rds policy"
   policy      = data.aws_iam_policy_document.rds_access.json
 }
@@ -250,6 +250,8 @@ locals {
 data "template_file" "userdata" {
   count = local.count_inst
 
+  depends_on = [aws_cloudfront_distribution.s3_distribution]
+
   template = "${file("provisioners/user_data.tpl")}"
 
   vars = {
@@ -260,11 +262,11 @@ data "template_file" "userdata" {
     tr_ansible_roles = "${jsonencode(var.role_profiles[lookup(var.instance_config_asg[count.index], "roles")])}"
 
     tr_rds_identifier = "${lookup(var.rds_config[count.index], "identifier")}"
-    tr_db_name = "${lookup(var.rds_config[count.index], "name")}"
+    tr_db_name = "${lookup(var.rds_config[count.index], "db_name")}"
     tr_db_username = "${var.db-UN}"
     tr_db_password = "${var.db-PW}"
 
-    tr_cloudfront_url = "${var.www_domain_name}"
+    tr_cloudfront_url = "${var.image_domain_name}"
 
     tr_backup_bucket = "${var.s3_bucket_backup_name}"
     tr_bucket_prefix_www = "${var.s3_bucket_www_prefix}"
@@ -284,7 +286,7 @@ resource "aws_instance" "tf_example" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = lookup(var.instance_config[count.index], "instance_type")
   key_name               = aws_key_pair.generated_key.key_name
-  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
+  # iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
   vpc_security_group_ids = [aws_security_group.bastion_sg_pub.id]
   subnet_id              = lookup(var.instance_config[count.index], "subnet")=="private" ? aws_subnet.private-subnet.id : aws_subnet.public-subnet.id
 
@@ -298,17 +300,17 @@ resource "aws_instance" "tf_example" {
 #---------------------------------------------------
 resource "aws_launch_configuration" "tf_lc" {
   count = local.count_inst_asg
-  depends_on = [null_resource.web_db_migration]
+  # depends_on = [null_resource.web_db_migration]
   # name     = "${lookup(var.instance_config_asg[count.index], "name")}"
   image_id = data.aws_ami.ubuntu.id
+
+  associate_public_ip_address = true
 
   instance_type        = lookup(var.instance_config_asg[count.index], "instance_type")
   key_name             = aws_key_pair.generated_key.key_name
   iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
 
   security_groups = [aws_security_group.web_sg.id]
-
-  associate_public_ip_address = true
 
   user_data = element(data.template_file.userdata.*.rendered, count.index)
 
@@ -387,7 +389,7 @@ resource "aws_acm_certificate_validation" "cert" {
 
 resource "aws_acm_certificate" "cert2" {
   provider = aws.east
-  domain_name       = var.www_domain_name
+  domain_name       = var.image_domain_name
   validation_method = "DNS"
 
   lifecycle {
@@ -397,7 +399,6 @@ resource "aws_acm_certificate" "cert2" {
 
 resource "aws_route53_record" "cert_validation2" {
   provider = aws.east
-  allow_overwrite = true
   name    = aws_acm_certificate.cert2.domain_validation_options.0.resource_record_name
   type    = aws_acm_certificate.cert2.domain_validation_options.0.resource_record_type
   zone_id = data.aws_route53_zone.zone.id
@@ -435,23 +436,23 @@ resource "aws_elb" "elb" {
 
   health_check {
     healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 3
-    interval            = 30
+    unhealthy_threshold = 8
+    timeout             = 60
+    interval            = 300
     target              = "HTTP:80/"
   }
 
   listener {
     lb_port           = 80
     lb_protocol       = "http"
-    instance_port     = 8888
+    instance_port     = 80
     instance_protocol = "http"
   }
 
   listener {
     lb_port            = 443
     lb_protocol        = "https"
-    instance_port      = 8888
+    instance_port      = 80
     instance_protocol  = "http"
     ssl_certificate_id = aws_acm_certificate_validation.cert.certificate_arn
   }
@@ -520,7 +521,7 @@ resource "aws_cloudwatch_metric_alarm" "web_cpu_alarm_down" {
   }
 
   alarm_description = "CPU utilization EC2 - Down"
-  alarm_actions = [element(aws_autoscaling_policy.up_policy.*.arn, count.index)]
+  alarm_actions = [element(aws_autoscaling_policy.down_policy.*.arn, count.index)]
 }
 
 #---------------------------------------------------
@@ -638,7 +639,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
       }
     }
 
-    viewer_protocol_policy = "allow-all"
+    viewer_protocol_policy = "redirect-to-https"
     min_ttl                = 0
     default_ttl            = 86400
     max_ttl                = 31536000
@@ -653,7 +654,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
     }
   }
 
-  aliases = [var.www_domain_name]
+  aliases = [var.image_domain_name]
 
   tags = {
     Environment = "cloudfront"
@@ -681,6 +682,18 @@ resource "aws_route53_record" "mm_alias_route53_record" {
   alias {
     name                   = aws_elb.elb.0.dns_name
     zone_id                = aws_elb.elb.0.zone_id
+    evaluate_target_health = true
+  }
+}
+
+resource "aws_route53_record" "images_alias_route53_record" {
+  zone_id = data.aws_route53_zone.mm.zone_id
+  name    = var.image_domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.s3_distribution.domain_name
+    zone_id                = aws_cloudfront_distribution.s3_distribution.hosted_zone_id
     evaluate_target_health = true
   }
 }

@@ -135,9 +135,11 @@ variable "rds_config" {
 
       engine_version = "5.7.22"
 
-      instance_class = "db.t2.medium"
+      instance_class = "db.t2.micro"
 
       name = "dbwp"
+
+      db_name = "wordpress"
 
       UN = ""
 
@@ -247,6 +249,10 @@ variable "www_domain_name" {
 
 variable "root_domain_name" {
   default = "mattmyers.me"
+}
+
+variable "image_domain_name" {
+  default = "images.mattmyers.me"
 }
 
 variable "s3_origin_id" {
