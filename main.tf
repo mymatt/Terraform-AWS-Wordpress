@@ -219,6 +219,17 @@ resource "null_resource" "web_db_migration" {
 # Get Latest AMI
 #---------------------------------------------------
 
+# data "aws_ami" "wp" {
+#   most_recent = true
+#
+#   filter {
+#     name   = "name"
+#     values = ["wp-mm"]
+#   }
+#
+#   owners = ["051288266932"]
+# }
+
 data "aws_ami" "ubuntu" {
   most_recent = true
 
@@ -313,7 +324,7 @@ resource "aws_launch_configuration" "tf_lc" {
 
   security_groups = [aws_security_group.web_sg.id]
 
-  # user_data = element(data.template_file.userdata.*.rendered, count.index)
+  user_data = element(data.template_file.userdata.*.rendered, count.index)
 
   lifecycle {
     create_before_destroy = true
