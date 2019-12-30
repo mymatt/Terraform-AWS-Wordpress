@@ -218,6 +218,21 @@ resource "null_resource" "web_db_migration" {
 #---------------------------------------------------
 # Get Latest AMI
 #---------------------------------------------------
+data "aws_ami" "wp" {
+  most_recent = true
+
+  filter {
+    name   = "name"
+    values = ["wp-mm"]
+  }
+
+  # filter {
+  #   name   = "virtualization-type"
+  #   values = [var.ami_type]
+  # }
+
+  owners = ["051288266932"]
+}
 
 data "aws_ami" "ubuntu" {
   most_recent = true
@@ -303,7 +318,7 @@ resource "aws_launch_configuration" "tf_lc" {
   count = local.count_inst_asg
   # depends_on = [null_resource.web_db_migration]
   # name     = "${lookup(var.instance_config_asg[count.index], "name")}"
-  image_id = data.aws_ami.ubuntu.id
+  image_id = data.aws_ami.wp.id
 
   # associate_public_ip_address = true
 
